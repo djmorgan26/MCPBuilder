@@ -12,7 +12,8 @@ import DeploymentPanel from './components/DeploymentPanel';
 import ToolModal from './components/ToolModal';
 import MCPConnections from './components/MCPConnections';
 import MCPToolsExplorer from './components/MCPToolsExplorer';
-import type { ServerConfig as ServerConfigType, Tool, Resource, ToolTemplate, GeneratedCode, MCPServer } from './types';
+import ProjectsPanel from './components/ProjectsPanel';
+import type { ServerConfig as ServerConfigType, Tool, Resource, ToolTemplate, GeneratedCode, MCPServer, SavedProject } from './types';
 import { generateCode } from './utils/codeGenerator';
 import { validateServer } from './utils/validation';
 import './App.css';
@@ -32,7 +33,7 @@ function App() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [isToolModalOpen, setIsToolModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tools' | 'resources' | 'code' | 'deploy' | 'connections' | 'explore'>('tools');
+  const [activeTab, setActiveTab] = useState<'tools' | 'resources' | 'code' | 'deploy' | 'connections' | 'explore' | 'projects'>('tools');
   const [generatedCode, setGeneratedCode] = useState<GeneratedCode | null>(null);
   const [selectedMCPServer, setSelectedMCPServer] = useState<MCPServer | null>(null);
 
@@ -114,6 +115,13 @@ function App() {
     setActiveTab('deploy');
   }, [generatedCode, handleGenerateCode]);
 
+  const handleLoadProject = useCallback((project: SavedProject) => {
+    setServerConfig(project.serverConfig);
+    setTools(project.tools);
+    setResources(project.resources);
+    setGeneratedCode(null); // Clear generated code when loading a project
+  }, []);
+
   return (
     <DndProvider backend={HTML5Backend}>
       <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -149,7 +157,7 @@ function App() {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div className="border-b border-gray-200">
                   <nav className="flex space-x-8 px-6" aria-label="Tabs">
-                    {(['tools', 'resources', 'connections', 'explore', 'code', 'deploy'] as const).map((tab) => (
+                    {(['tools', 'resources', 'connections', 'explore', 'projects', 'code', 'deploy'] as const).map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -163,6 +171,7 @@ function App() {
                       >
                         {tab === 'connections' ? 'MCP Servers' :
                          tab === 'explore' ? 'Explore Tools' :
+                         tab === 'projects' ? 'Projects' :
                          tab.charAt(0).toUpperCase() + tab.slice(1)}
                       </button>
                     ))}
@@ -195,6 +204,15 @@ function App() {
                   {activeTab === 'explore' && (
                     <MCPToolsExplorer
                       selectedServer={selectedMCPServer}
+                    />
+                  )}
+
+                  {activeTab === 'projects' && (
+                    <ProjectsPanel
+                      serverConfig={serverConfig}
+                      tools={tools}
+                      resources={resources}
+                      onLoadProject={handleLoadProject}
                     />
                   )}
 

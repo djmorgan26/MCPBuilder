@@ -222,3 +222,14 @@ export interface MCPToolExecution {
   endTime?: Date;
   duration?: number;
 }
+
+// Project Storage Types
+export interface SavedProject {
+  id: string;
+  name: string;
+  serverConfig: ServerConfig;
+  tools: Tool[];
+  resources: Resource[];
+  createdAt: Date;
+  updatedAt: Date;
+}

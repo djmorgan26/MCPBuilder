@@ -8,16 +8,23 @@ import handlebars from 'handlebars';
 import dotenv from 'dotenv';
 import { promises as fs } from 'fs';
 import path from 'path';
-import { ServerConfig, Tool, Resource, GeneratedCode } from '../types';
+import { ServerConfig, Tool, Resource, GeneratedCode } from './types';
 import MCPGateway from './mcpGateway';
+import DeploymentService from './deploymentService';
+import StorageService from './storageService';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
 
-// Initialize MCP Gateway
+// Initialize services
 const mcpGateway = new MCPGateway();
+const deploymentService = new DeploymentService();
+const storageService = new StorageService();
+
+// Initialize storage
+storageService.init().catch(console.error);
 
 // Setup gateway event handlers
 mcpGateway.on('server:connected', (server) => {
@@ -34,6 +41,23 @@ mcpGateway.on('server:error', (server, error) => {
 
 mcpGateway.on('tool:executed', (execution) => {
   console.log(`Tool executed: ${execution.toolName} on ${execution.serverId} (${execution.duration}ms)`);
+});
+
+// Setup deployment service event handlers
+deploymentService.on('deployment:started', (deployment) => {
+  console.log(`Deployment started: ${deployment.id}`);
+});
+
+deploymentService.on('deployment:completed', (deployment) => {
+  console.log(`Deployment completed: ${deployment.id} - ${deployment.endpoint}`);
+});
+
+deploymentService.on('deployment:failed', (deployment, error) => {
+  console.error(`Deployment failed: ${deployment.id} - ${error.message}`);
+});
+
+deploymentService.on('deployment:stopped', (deployment) => {
+  console.log(`Deployment stopped: ${deployment.id}`);
 });
 
 // Middleware
@@ -202,7 +226,7 @@ app.get('/api/templates', (req, res) => {
   }
 });
 
-// Deploy to cloud (placeholder - would integrate with cloud providers)
+// Deploy MCP server
 app.post('/api/deploy', async (req, res) => {
   try {
     const { serverConfig, generatedCode, deploymentConfig } = req.body;
@@ -213,16 +237,17 @@ app.post('/api/deploy', async (req, res) => {
       });
     }
 
-    // This would integrate with actual deployment services
-    // For now, we'll simulate deployment
-    await simulateDeployment(serverConfig, deploymentConfig);
+    // Start deployment
+    const deployment = await deploymentService.deploy(serverConfig, generatedCode, deploymentConfig);
 
     res.json({
       success: true,
       data: {
-        deploymentId: `deploy_${Date.now()}`,
-        status: 'deployed',
-        url: `https://${serverConfig.name}.herokuapp.com`, // Example URL
+        deploymentId: deployment.id,
+        status: deployment.status,
+        endpoint: deployment.endpoint,
+        progress: deployment.progress,
+        logs: deployment.logs,
         timestamp: new Date().toISOString()
       }
     });
@@ -230,6 +255,71 @@ app.post('/api/deploy', async (req, res) => {
     console.error('Deployment error:', error);
     res.status(500).json({
       error: 'Deployment failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get deployment status
+app.get('/api/deploy/:deploymentId', (req, res) => {
+  try {
+    const { deploymentId } = req.params;
+    const deployment = deploymentService.getDeployment(deploymentId);
+
+    if (!deployment) {
+      return res.status(404).json({
+        error: 'Deployment not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: deployment,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get deployment error:', error);
+    res.status(500).json({
+      error: 'Failed to get deployment status',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Stop deployment
+app.post('/api/deploy/:deploymentId/stop', async (req, res) => {
+  try {
+    const { deploymentId } = req.params;
+    await deploymentService.stopDeployment(deploymentId);
+
+    res.json({
+      success: true,
+      message: 'Deployment stopped',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Stop deployment error:', error);
+    res.status(500).json({
+      error: 'Failed to stop deployment',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get all deployments
+app.get('/api/deployments', (req, res) => {
+  try {
+    const deployments = deploymentService.getAllDeployments();
+
+    res.json({
+      success: true,
+      data: deployments,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get deployments error:', error);
+    res.status(500).json({
+      error: 'Failed to get deployments',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
@@ -403,6 +493,247 @@ app.get('/api/mcp/health', (req, res) => {
   }
 });
 
+// Project Storage Endpoints
+
+// Save a project
+app.post('/api/projects', async (req, res) => {
+  try {
+    const { serverConfig, tools, resources, projectId } = req.body;
+
+    if (!serverConfig || !tools) {
+      return res.status(400).json({
+        error: 'Missing required fields: serverConfig and tools'
+      });
+    }
+
+    const id = await storageService.saveProject(
+      serverConfig,
+      tools,
+      resources || [],
+      projectId
+    );
+
+    res.json({
+      success: true,
+      data: { projectId: id },
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Save project error:', error);
+    res.status(500).json({
+      error: 'Failed to save project',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Load a project
+app.get('/api/projects/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const project = await storageService.loadProject(projectId);
+
+    if (!project) {
+      return res.status(404).json({
+        error: 'Project not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      data: project,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Load project error:', error);
+    res.status(500).json({
+      error: 'Failed to load project',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get all projects
+app.get('/api/projects', async (req, res) => {
+  try {
+    const { search, limit } = req.query;
+    let projects;
+
+    if (search) {
+      projects = await storageService.searchProjects(search as string);
+    } else {
+      projects = await storageService.getRecentProjects(
+        limit ? parseInt(limit as string) : 10
+      );
+    }
+
+    res.json({
+      success: true,
+      data: projects,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get projects error:', error);
+    res.status(500).json({
+      error: 'Failed to get projects',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Delete a project
+app.delete('/api/projects/:projectId', async (req, res) => {
+  try {
+    const { projectId } = req.params;
+    const deleted = await storageService.deleteProject(projectId);
+
+    if (!deleted) {
+      return res.status(404).json({
+        error: 'Project not found'
+      });
+    }
+
+    res.json({
+      success: true,
+      message: 'Project deleted successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Delete project error:', error);
+    res.status(500).json({
+      error: 'Failed to delete project',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Auto-save current session
+app.post('/api/projects/auto-save', async (req, res) => {
+  try {
+    const { serverConfig, tools, resources } = req.body;
+
+    if (!serverConfig || !tools) {
+      return res.status(400).json({
+        error: 'Missing required fields: serverConfig and tools'
+      });
+    }
+
+    await storageService.autoSave(serverConfig, tools, resources || []);
+
+    res.json({
+      success: true,
+      message: 'Auto-saved successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Auto-save error:', error);
+    res.status(500).json({
+      error: 'Failed to auto-save',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Load auto-saved session
+app.get('/api/projects/auto-save', async (req, res) => {
+  try {
+    const project = await storageService.loadAutoSave();
+
+    res.json({
+      success: true,
+      data: project,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Load auto-save error:', error);
+    res.status(500).json({
+      error: 'Failed to load auto-save',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Docker Integration Endpoints
+
+// Get Docker container logs
+app.get('/api/deploy/:deploymentId/logs', async (req, res) => {
+  try {
+    const { deploymentId } = req.params;
+    const { lines = 100 } = req.query;
+
+    const deployment = deploymentService.getDeployment(deploymentId);
+    if (!deployment) {
+      return res.status(404).json({
+        error: 'Deployment not found'
+      });
+    }
+
+    if (!deployment.containerId) {
+      return res.status(400).json({
+        error: 'No container ID found for this deployment'
+      });
+    }
+
+    const logs = await deploymentService.getContainerLogs(deployment.containerId, Number(lines));
+
+    res.json({
+      success: true,
+      data: {
+        logs,
+        containerId: deployment.containerId,
+        timestamp: new Date().toISOString()
+      }
+    });
+  } catch (error) {
+    console.error('Get container logs error:', error);
+    res.status(500).json({
+      error: 'Failed to get container logs',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Execute command in Docker container
+app.post('/api/deploy/:deploymentId/exec', async (req, res) => {
+  try {
+    const { deploymentId } = req.params;
+    const { command } = req.body;
+
+    if (!command) {
+      return res.status(400).json({
+        error: 'Command is required'
+      });
+    }
+
+    const deployment = deploymentService.getDeployment(deploymentId);
+    if (!deployment) {
+      return res.status(404).json({
+        error: 'Deployment not found'
+      });
+    }
+
+    if (!deployment.containerId) {
+      return res.status(400).json({
+        error: 'No container ID found for this deployment'
+      });
+    }
+
+    const result = await deploymentService.execInContainer(deployment.containerId, command);
+
+    res.json({
+      success: true,
+      data: result,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Execute command error:', error);
+    res.status(500).json({
+      error: 'Failed to execute command',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
 // Error handling middleware
 app.use((error: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
   console.error('Unhandled error:', error);
@@ -484,12 +815,16 @@ function generateCode(serverConfig: ServerConfig, tools: Tool[], resources: Reso
 }
 
 function generateMainPy(serverConfig: ServerConfig, tools: Tool[], resources: Resource[]): string {
-  const toolFunctions = tools.map(tool => `
-def ${tool.name}(${tool.parameters.map(p => `${p.name}: ${getTypeHint(p.type)}`).join(', ')}):
+  const toolFunctions = tools.map(tool => {
+    const functionName = sanitizePythonIdentifier(tool.name);
+    return `
+@mcp.tool()
+def ${functionName}(${tool.parameters.map(p => `${p.name}: ${getTypeHint(p.type)}`).join(', ')}) -> str:
     """${tool.description}"""
     # TODO: Implement tool logic
-    return "Tool executed successfully"
-`).join('\n');
+    return f"Tool ${tool.name} executed successfully"
+`;
+  }).join('\n');
 
   return `#!/usr/bin/env python3
 """
@@ -501,19 +836,29 @@ import asyncio
 import logging
 from fastmcp import FastMCP
 
+# Configure logging
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("${serverConfig.name}")
+
+# Create MCP server instance
 mcp = FastMCP("${serverConfig.name}")
 
 ${toolFunctions}
 
-async def main():
+def main():
     """Main server entry point."""
     logger.info("Starting ${serverConfig.name}...")
-    ${tools.map(tool => `mcp.add_tool("${tool.name}", ${tool.name})`).join('\n    ')}
-    await mcp.run()
+    try:
+        # Run the server with asyncio
+        mcp.run()
+    except KeyboardInterrupt:
+        logger.info("Server stopped by user")
+    except Exception as e:
+        logger.error(f"Server error: {e}")
+        raise
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
 `;
 }
 
@@ -596,8 +941,14 @@ function getToolTemplates() {
   return [];
 }
 
-async function simulateDeployment(serverConfig: ServerConfig, deploymentConfig: any) {
-  // Simulate deployment delay
-  await new Promise(resolve => setTimeout(resolve, 2000));
-  return { success: true };
+function sanitizePythonIdentifier(name: string): string {
+  // Convert to snake_case and remove invalid characters
+  return name
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '_')
+    .replace(/^[0-9]/, '_$&') // Prefix with underscore if starts with number
+    .replace(/^_+|_+$/g, '') // Remove leading/trailing underscores
+    .replace(/_+/g, '_') // Replace multiple underscores with single
+    || 'tool'; // Fallback if empty
 }
+

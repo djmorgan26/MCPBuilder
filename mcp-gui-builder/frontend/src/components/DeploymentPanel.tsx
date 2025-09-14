@@ -4,7 +4,7 @@ import {
   CheckCircle, AlertTriangle, ExternalLink,
   Copy, Terminal, Package, Play, Container
 } from 'lucide-react';
-import type { ServerConfig, GeneratedCode, DeploymentConfig } from '../types';
+import type { ServerConfig, GeneratedCode, DeploymentConfig } from '../types/index';
 
 interface DeploymentPanelProps {
   serverConfig: ServerConfig;
@@ -19,6 +19,9 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
   const [isDeploying, setIsDeploying] = useState(false);
   const [deploymentStatus, setDeploymentStatus] = useState<'idle' | 'deploying' | 'success' | 'error'>('idle');
   const [deploymentLogs, setDeploymentLogs] = useState<string[]>([]);
+  const [deploymentId, setDeploymentId] = useState<string | null>(null);
+  const [deploymentEndpoint, setDeploymentEndpoint] = useState<string | null>(null);
+  const [deploymentProgress, setDeploymentProgress] = useState(0);
 
   const handleDeploy = async () => {
     if (!generatedCode) return;
@@ -26,28 +29,75 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
     setIsDeploying(true);
     setDeploymentStatus('deploying');
     setDeploymentLogs([]);
+    setDeploymentProgress(0);
 
     try {
-      // Simulate deployment process
-      const steps = [
-        'Preparing deployment package...',
-        'Validating server configuration...',
-        'Installing dependencies...',
-        'Starting MCP server...',
-        'Testing connectivity...',
-        'Deployment complete!'
-      ];
+      const deploymentConfig: DeploymentConfig = {
+        target: deploymentTarget,
+        dockerConfig: deploymentTarget === 'docker' ? {
+          imageName: serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase(),
+          tag: 'latest',
+          baseImage: `python:${serverConfig.pythonVersion}-slim`,
+          exposePort: 8000,
+          volumes: [],
+          envFile: Object.keys(serverConfig.environment).length > 0
+        } : undefined
+      };
 
-      for (let i = 0; i < steps.length; i++) {
-        await new Promise(resolve => setTimeout(resolve, 1000));
-        setDeploymentLogs(prev => [...prev, `${new Date().toLocaleTimeString()} - ${steps[i]}`]);
+      // Start deployment
+      const response = await fetch('/api/deploy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          serverConfig,
+          generatedCode,
+          deploymentConfig
+        })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Deployment failed: ${response.statusText}`);
       }
 
-      setDeploymentStatus('success');
+      const result = await response.json();
+      const deploymentId = result.data.deploymentId;
+      setDeploymentId(deploymentId);
+
+      // Poll for deployment status
+      const pollInterval = setInterval(async () => {
+        try {
+          const statusResponse = await fetch(`/api/deploy/${deploymentId}`);
+          if (statusResponse.ok) {
+            const statusResult = await statusResponse.json();
+            const deployment = statusResult.data;
+
+            setDeploymentProgress(deployment.progress || 0);
+            setDeploymentLogs(deployment.logs || []);
+
+            if (deployment.status === 'running') {
+              setDeploymentStatus('success');
+              setDeploymentEndpoint(deployment.endpoint);
+              clearInterval(pollInterval);
+              setIsDeploying(false);
+            } else if (deployment.status === 'failed') {
+              setDeploymentStatus('error');
+              clearInterval(pollInterval);
+              setIsDeploying(false);
+            }
+          }
+        } catch (error) {
+          console.error('Error polling deployment status:', error);
+        }
+      }, 1000);
+
+      // Cleanup interval after 5 minutes
+      setTimeout(() => clearInterval(pollInterval), 300000);
+
     } catch (error) {
       setDeploymentStatus('error');
       setDeploymentLogs(prev => [...prev, `${new Date().toLocaleTimeString()} - Deployment failed: ${error}`]);
-    } finally {
       setIsDeploying(false);
     }
   };
@@ -248,6 +298,19 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
             </div>
           </div>
 
+          {/* Progress Bar */}
+          {deploymentStatus === 'deploying' && (
+            <div className="bg-gray-200 rounded-full h-2 mb-4">
+              <div
+                className="bg-mcp-primary h-2 rounded-full transition-all duration-300"
+                style={{ width: `${deploymentProgress}%` }}
+              />
+              <div className="text-xs text-gray-600 mt-1 text-center">
+                {deploymentProgress}% complete
+              </div>
+            </div>
+          )}
+
           {/* Deploy Button */}
           <button
             onClick={handleDeploy}
@@ -296,16 +359,22 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
                 <h4 className="text-sm font-medium text-green-800">Deployment Successful!</h4>
               </div>
               <p className="text-sm text-green-700 mb-4">
-                Your MCP server is now running and ready to use.
+                Your MCP server is now running at: {deploymentEndpoint}
               </p>
               <div className="flex items-center space-x-3">
-                <button className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors">
+                <button
+                  onClick={() => deploymentEndpoint && window.open(deploymentEndpoint, '_blank')}
+                  className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors"
+                >
                   <ExternalLink className="w-4 h-4" />
                   <span>View Server</span>
                 </button>
-                <button className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors">
-                  <Terminal className="w-4 h-4" />
-                  <span>Open Terminal</span>
+                <button
+                  onClick={() => copyCommand(deploymentEndpoint || '')}
+                  className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Endpoint</span>
                 </button>
               </div>
             </div>
@@ -332,6 +401,147 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
                 </div>
               </div>
             </div>
+          </div>
+        </div>
+      )}
+
+      {/* Docker Connection Setup */}
+      {deploymentStatus === 'success' && deploymentEndpoint && deploymentTarget === 'docker' && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <Container className="w-6 h-6 text-blue-600" />
+            <h3 className="text-lg font-medium text-gray-900">Docker Container Ready</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-6">
+            Your MCP server is running in a Docker container. Use these commands to interact with it.
+          </p>
+
+          <div className="space-y-4">
+            {/* Claude Desktop Configuration */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h4 className="font-medium text-gray-900 mb-3">Claude Desktop Configuration</h4>
+              <p className="text-xs text-gray-600 mb-2">Add this to your Claude Desktop configuration:</p>
+              <div className="bg-gray-900 rounded p-3 font-mono text-xs mb-3">
+                <pre className="text-gray-100 whitespace-pre-wrap">
+{JSON.stringify({
+  "mcpServers": {
+    [serverConfig.name]: {
+      "command": "docker",
+      "args": ["exec", "-i", serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase(), "python", "main.py"]
+    }
+  }
+}, null, 2)}
+                </pre>
+              </div>
+              <button
+                onClick={() => copyCommand(JSON.stringify({
+                  "mcpServers": {
+                    [serverConfig.name]: {
+                      "command": "docker",
+                      "args": ["exec", "-i", serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase(), "python", "main.py"]
+                    }
+                  }
+                }, null, 2))}
+                className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-orange-50 hover:bg-orange-100 text-orange-700 rounded-md transition-colors text-sm"
+              >
+                <Copy className="w-4 h-4" />
+                <span>Copy Claude Configuration</span>
+              </button>
+            </div>
+
+            {/* Direct Docker Commands */}
+            <div className="border border-gray-200 rounded-lg p-4">
+              <h4 className="font-medium text-gray-900 mb-3">Docker Commands</h4>
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Connect to server:</label>
+                  <div className="bg-gray-900 rounded p-2 font-mono text-xs">
+                    <span className="text-gray-100">docker exec -it {serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()} python main.py</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">View logs:</label>
+                  <div className="bg-gray-900 rounded p-2 font-mono text-xs">
+                    <span className="text-gray-100">docker logs {serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}</span>
+                  </div>
+                </div>
+                <div>
+                  <label className="text-xs font-medium text-gray-700 block mb-1">Stop container:</label>
+                  <div className="bg-gray-900 rounded p-2 font-mono text-xs">
+                    <span className="text-gray-100">docker stop {serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}</span>
+                  </div>
+                </div>
+              </div>
+              <div className="flex space-x-2 mt-3">
+                <button
+                  onClick={() => copyCommand(`docker exec -it ${serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()} python main.py`)}
+                  className="flex-1 flex items-center justify-center space-x-2 py-2 px-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-md transition-colors text-sm"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Connect</span>
+                </button>
+                <button
+                  onClick={() => copyCommand(`docker logs ${serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}`)}
+                  className="flex-1 flex items-center justify-center space-x-2 py-2 px-3 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-md transition-colors text-sm"
+                >
+                  <Copy className="w-4 h-4" />
+                  <span>Copy Logs</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Container Info */}
+            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+              <h4 className="text-sm font-medium text-blue-900 mb-2">Container Information</h4>
+              <div className="text-xs text-blue-800 space-y-1">
+                <div>Container ID: <code className="bg-blue-100 px-1 rounded">{deploymentId}</code></div>
+                <div>Endpoint: <code className="bg-blue-100 px-1 rounded">{deploymentEndpoint}</code></div>
+                <div>Image: <code className="bg-blue-100 px-1 rounded">{serverConfig.name.replace(/[^a-zA-Z0-9-]/g, '-').toLowerCase()}:latest</code></div>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Local Deployment Connection */}
+      {deploymentStatus === 'success' && deploymentEndpoint && deploymentTarget === 'local' && (
+        <div className="bg-white rounded-lg border border-gray-200 p-6">
+          <div className="flex items-center space-x-3 mb-4">
+            <Monitor className="w-6 h-6 text-green-600" />
+            <h3 className="text-lg font-medium text-gray-900">Local Server Ready</h3>
+          </div>
+          <p className="text-sm text-gray-600 mb-6">
+            Your MCP server is running locally. Use this configuration to connect.
+          </p>
+
+          <div className="border border-gray-200 rounded-lg p-4">
+            <h4 className="font-medium text-gray-900 mb-3">Claude Desktop Configuration</h4>
+            <div className="bg-gray-900 rounded p-3 font-mono text-xs mb-3">
+              <pre className="text-gray-100 whitespace-pre-wrap">
+{JSON.stringify({
+  "mcpServers": {
+    [serverConfig.name]: {
+      "command": "python",
+      "args": [deploymentEndpoint?.replace('stdio:', '') || '']
+    }
+  }
+}, null, 2)}
+              </pre>
+            </div>
+            <button
+              onClick={() => copyCommand(JSON.stringify({
+                "mcpServers": {
+                  [serverConfig.name]: {
+                    "command": "python",
+                    "args": [deploymentEndpoint?.replace('stdio:', '') || '']
+                  }
+                }
+              }, null, 2))}
+              className="w-full flex items-center justify-center space-x-2 py-2 px-3 bg-green-50 hover:bg-green-100 text-green-700 rounded-md transition-colors text-sm"
+            >
+              <Copy className="w-4 h-4" />
+              <span>Copy Configuration</span>
+            </button>
           </div>
         </div>
       )}
