@@ -44,7 +44,7 @@ const Header: React.FC<HeaderProps> = ({ onPreview, onDeploy, onHelp }) => {
 
             <div className="flex items-center space-x-2 border-l border-gray-200 pl-4">
               <button
-                onClick={() => window.open('https://github.com/anthropics/mcp-gui-builder', '_blank')}
+                onClick={() => window.open('https://github.com/djmorgan26/MCPBuilder', '_blank')}
                 className="p-2 text-gray-500 hover:text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
                 title="GitHub"
               >

@@ -10,7 +10,9 @@ import ResourceManager from './components/ResourceManager';
 import CodePreview from './components/CodePreview';
 import DeploymentPanel from './components/DeploymentPanel';
 import ToolModal from './components/ToolModal';
-import type { ServerConfig as ServerConfigType, Tool, Resource, ToolTemplate, GeneratedCode } from './types';
+import MCPConnections from './components/MCPConnections';
+import MCPToolsExplorer from './components/MCPToolsExplorer';
+import type { ServerConfig as ServerConfigType, Tool, Resource, ToolTemplate, GeneratedCode, MCPServer } from './types';
 import { generateCode } from './utils/codeGenerator';
 import { validateServer } from './utils/validation';
 import './App.css';
@@ -30,8 +32,9 @@ function App() {
   const [resources, setResources] = useState<Resource[]>([]);
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [isToolModalOpen, setIsToolModalOpen] = useState(false);
-  const [activeTab, setActiveTab] = useState<'tools' | 'resources' | 'code' | 'deploy'>('tools');
+  const [activeTab, setActiveTab] = useState<'tools' | 'resources' | 'code' | 'deploy' | 'connections' | 'explore'>('tools');
   const [generatedCode, setGeneratedCode] = useState<GeneratedCode | null>(null);
+  const [selectedMCPServer, setSelectedMCPServer] = useState<MCPServer | null>(null);
 
   const handleAddTool = useCallback((template: ToolTemplate) => {
     const newTool: Tool = {
@@ -146,7 +149,7 @@ function App() {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200">
                 <div className="border-b border-gray-200">
                   <nav className="flex space-x-8 px-6" aria-label="Tabs">
-                    {(['tools', 'resources', 'code', 'deploy'] as const).map((tab) => (
+                    {(['tools', 'resources', 'connections', 'explore', 'code', 'deploy'] as const).map((tab) => (
                       <button
                         key={tab}
                         onClick={() => setActiveTab(tab)}
@@ -158,7 +161,9 @@ function App() {
                           }
                         `}
                       >
-                        {tab.charAt(0).toUpperCase() + tab.slice(1)}
+                        {tab === 'connections' ? 'MCP Servers' :
+                         tab === 'explore' ? 'Explore Tools' :
+                         tab.charAt(0).toUpperCase() + tab.slice(1)}
                       </button>
                     ))}
                   </nav>
@@ -178,6 +183,19 @@ function App() {
                     <div className="text-center py-12 text-gray-500">
                       Resource editor will appear here
                     </div>
+                  )}
+
+                  {activeTab === 'connections' && (
+                    <MCPConnections
+                      onServerSelect={setSelectedMCPServer}
+                      selectedServerId={selectedMCPServer?.id}
+                    />
+                  )}
+
+                  {activeTab === 'explore' && (
+                    <MCPToolsExplorer
+                      selectedServer={selectedMCPServer}
+                    />
                   )}
 
                   {activeTab === 'code' && (
@@ -204,23 +222,92 @@ function App() {
               <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Help</h3>
                 <div className="space-y-4 text-sm text-gray-600">
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-1">Getting Started</h4>
-                    <p>1. Configure your server details</p>
-                    <p>2. Add tools from templates</p>
-                    <p>3. Configure each tool</p>
-                    <p>4. Generate and deploy</p>
-                  </div>
+                  {activeTab === 'tools' && (
+                    <>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Building Tools</h4>
+                        <p>1. Configure your server details</p>
+                        <p>2. Add tools from templates</p>
+                        <p>3. Configure each tool</p>
+                        <p>4. Generate and deploy</p>
+                      </div>
 
-                  <div>
-                    <h4 className="font-medium text-gray-900 mb-1">Tips</h4>
-                    <ul className="list-disc list-inside space-y-1">
-                      <li>Drag tools to reorder them</li>
-                      <li>Test tools before deployment</li>
-                      <li>Use environment variables for secrets</li>
-                      <li>Check generated code for customization</li>
-                    </ul>
-                  </div>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Tips</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>Drag tools to reorder them</li>
+                          <li>Test tools before deployment</li>
+                          <li>Use environment variables for secrets</li>
+                          <li>Check generated code for customization</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
+
+                  {activeTab === 'connections' && (
+                    <>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">MCP Connections</h4>
+                        <p>1. Add MCP servers to connect to existing tools</p>
+                        <p>2. Configure transport type (HTTP/WebSocket/Stdio)</p>
+                        <p>3. Connect to discover available tools</p>
+                        <p>4. Use tools directly or import to your build</p>
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Transport Types</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li><strong>HTTP:</strong> REST API servers</li>
+                          <li><strong>WebSocket:</strong> Real-time connections</li>
+                          <li><strong>Stdio:</strong> Local subprocess servers</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
+
+                  {activeTab === 'explore' && (
+                    <>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Tool Explorer</h4>
+                        <p>1. Browse tools from connected MCP servers</p>
+                        <p>2. Execute tools with custom parameters</p>
+                        <p>3. View execution results and timing</p>
+                        <p>4. Test server integration before deploying</p>
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Execution Tips</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>Server must be connected to execute tools</li>
+                          <li>Check parameter types and requirements</li>
+                          <li>Use JSON format for complex parameters</li>
+                          <li>Monitor execution time and errors</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
+
+                  {(activeTab === 'code' || activeTab === 'deploy' || activeTab === 'resources') && (
+                    <>
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Getting Started</h4>
+                        <p>1. Configure your server details</p>
+                        <p>2. Add tools from templates</p>
+                        <p>3. Configure each tool</p>
+                        <p>4. Generate and deploy</p>
+                      </div>
+
+                      <div>
+                        <h4 className="font-medium text-gray-900 mb-1">Tips</h4>
+                        <ul className="list-disc list-inside space-y-1">
+                          <li>Drag tools to reorder them</li>
+                          <li>Test tools before deployment</li>
+                          <li>Use environment variables for secrets</li>
+                          <li>Check generated code for customization</li>
+                        </ul>
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </div>

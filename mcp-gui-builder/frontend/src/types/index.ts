@@ -139,3 +139,86 @@ export interface ValidationResult {
   errors: string[];
   warnings: string[];
 }
+
+// MCP Connection Gateway Types
+export interface MCPServer {
+  id: string;
+  name: string;
+  description: string;
+  url: string;
+  protocol: 'stdio' | 'http' | 'websocket';
+  status: 'connected' | 'disconnected' | 'error' | 'connecting';
+  tools: MCPTool[];
+  resources: MCPResource[];
+  lastHeartbeat: Date;
+  config: MCPServerConfig;
+  error?: string;
+}
+
+export interface MCPServerConfig {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  transport: {
+    type: 'stdio' | 'http' | 'websocket';
+    endpoint?: string;
+    port?: number;
+  };
+  auth?: {
+    type: 'none' | 'bearer' | 'oauth' | 'custom';
+    credentials?: Record<string, string>;
+  };
+  retries: number;
+  timeout: number;
+}
+
+export interface MCPTool {
+  name: string;
+  description: string;
+  inputSchema: any;
+  serverId: string;
+}
+
+export interface MCPResource {
+  uri: string;
+  name: string;
+  description?: string;
+  mimeType?: string;
+  serverId: string;
+}
+
+export interface MCPGatewayConfig {
+  servers: Record<string, MCPServerConfig>;
+  registry: {
+    enabled: boolean;
+    discoveryInterval: number;
+  };
+  security: {
+    enableAuth: boolean;
+    allowedClients: string[];
+  };
+}
+
+export interface MCPConnection {
+  id: string;
+  serverId: string;
+  status: 'active' | 'inactive' | 'error';
+  connectedAt: Date;
+  lastActivity: Date;
+  clientInfo?: {
+    userAgent: string;
+    ip: string;
+  };
+}
+
+export interface MCPToolExecution {
+  id: string;
+  toolName: string;
+  serverId: string;
+  parameters: any;
+  result?: any;
+  error?: string;
+  startTime: Date;
+  endTime?: Date;
+  duration?: number;
+}

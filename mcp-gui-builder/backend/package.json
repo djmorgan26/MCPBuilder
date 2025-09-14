@@ -10,16 +10,25 @@
     "test": "echo \"Error: no test specified\" && exit 1",
     "clean": "rm -rf dist"
   },
-  "keywords": ["mcp", "model-context-protocol", "gui", "builder"],
+  "keywords": [
+    "mcp",
+    "model-context-protocol",
+    "gui",
+    "builder"
+  ],
   "author": "MCP GUI Builder",
   "license": "MIT",
   "dependencies": {
+    "@types/archiver": "^6.0.3",
     "@types/cors": "^2.8.19",
     "@types/express": "^5.0.3",
     "@types/js-yaml": "^4.0.9",
     "@types/multer": "^2.0.0",
     "@types/node": "^24.4.0",
+    "@types/uuid": "^10.0.0",
+    "@types/ws": "^8.5.13",
     "archiver": "^7.0.1",
+    "axios": "^1.7.7",
     "cors": "^2.8.5",
     "dotenv": "^17.2.2",
     "express": "^5.1.0",
@@ -27,7 +36,9 @@
     "helmet": "^8.1.0",
     "js-yaml": "^4.1.0",
     "multer": "^2.0.2",
-    "typescript": "^5.9.2"
+    "typescript": "^5.9.2",
+    "uuid": "^10.0.0",
+    "ws": "^8.18.0"
   },
   "devDependencies": {
     "nodemon": "^3.1.10",

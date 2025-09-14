@@ -9,11 +9,32 @@ import dotenv from 'dotenv';
 import { promises as fs } from 'fs';
 import path from 'path';
 import { ServerConfig, Tool, Resource, GeneratedCode } from '../types';
+import MCPGateway from './mcpGateway';
 
 dotenv.config();
 
 const app = express();
 const port = process.env.PORT || 3001;
+
+// Initialize MCP Gateway
+const mcpGateway = new MCPGateway();
+
+// Setup gateway event handlers
+mcpGateway.on('server:connected', (server) => {
+  console.log(`MCP Server connected: ${server.name} (${server.id})`);
+});
+
+mcpGateway.on('server:disconnected', (server) => {
+  console.log(`MCP Server disconnected: ${server.name} (${server.id})`);
+});
+
+mcpGateway.on('server:error', (server, error) => {
+  console.error(`MCP Server error: ${server.name} (${server.id}):`, error);
+});
+
+mcpGateway.on('tool:executed', (execution) => {
+  console.log(`Tool executed: ${execution.toolName} on ${execution.serverId} (${execution.duration}ms)`);
+});
 
 // Middleware
 app.use(helmet());
@@ -98,7 +119,7 @@ app.post('/api/download', async (req, res) => {
     const archive = archiver('zip', { zlib: { level: 9 } });
 
     // Handle archive events
-    archive.on('error', (err) => {
+    archive.on('error', (err: Error) => {
       console.error('Archive error:', err);
       res.status(500).json({ error: 'Archive creation failed' });
     });
@@ -209,6 +230,174 @@ app.post('/api/deploy', async (req, res) => {
     console.error('Deployment error:', error);
     res.status(500).json({
       error: 'Deployment failed',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// MCP Gateway API Endpoints
+
+// Get all MCP servers
+app.get('/api/mcp/servers', (req, res) => {
+  try {
+    const servers = mcpGateway.getServers();
+    res.json({
+      success: true,
+      data: servers,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get servers error:', error);
+    res.status(500).json({
+      error: 'Failed to get servers',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Register a new MCP server
+app.post('/api/mcp/servers', async (req, res) => {
+  try {
+    const { id, name, description, config } = req.body;
+
+    if (!id || !name || !config) {
+      return res.status(400).json({
+        error: 'Missing required fields: id, name, config'
+      });
+    }
+
+    const server = await mcpGateway.registerServer({
+      id,
+      name,
+      description: description || '',
+      ...config
+    });
+
+    res.json({
+      success: true,
+      data: server,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Register server error:', error);
+    res.status(500).json({
+      error: 'Failed to register server',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Connect to an MCP server
+app.post('/api/mcp/servers/:serverId/connect', async (req, res) => {
+  try {
+    const { serverId } = req.params;
+    await mcpGateway.connectServer(serverId);
+
+    res.json({
+      success: true,
+      message: 'Server connected successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Connect server error:', error);
+    res.status(500).json({
+      error: 'Failed to connect to server',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Disconnect from an MCP server
+app.post('/api/mcp/servers/:serverId/disconnect', async (req, res) => {
+  try {
+    const { serverId } = req.params;
+    await mcpGateway.disconnectServer(serverId);
+
+    res.json({
+      success: true,
+      message: 'Server disconnected successfully',
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Disconnect server error:', error);
+    res.status(500).json({
+      error: 'Failed to disconnect from server',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Execute a tool on an MCP server
+app.post('/api/mcp/servers/:serverId/tools/:toolName/execute', async (req, res) => {
+  try {
+    const { serverId, toolName } = req.params;
+    const { parameters } = req.body;
+
+    const execution = await mcpGateway.executeTool(serverId, toolName, parameters || {});
+
+    res.json({
+      success: true,
+      data: execution,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Execute tool error:', error);
+    res.status(500).json({
+      error: 'Failed to execute tool',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get all tools across all servers
+app.get('/api/mcp/tools', (req, res) => {
+  try {
+    const tools = mcpGateway.getAllTools();
+    res.json({
+      success: true,
+      data: tools,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get tools error:', error);
+    res.status(500).json({
+      error: 'Failed to get tools',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get all resources across all servers
+app.get('/api/mcp/resources', (req, res) => {
+  try {
+    const resources = mcpGateway.getAllResources();
+    res.json({
+      success: true,
+      data: resources,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Get resources error:', error);
+    res.status(500).json({
+      error: 'Failed to get resources',
+      message: error instanceof Error ? error.message : 'Unknown error'
+    });
+  }
+});
+
+// Get MCP Gateway health status
+app.get('/api/mcp/health', (req, res) => {
+  try {
+    const health = mcpGateway.getHealthStatus();
+    res.json({
+      success: true,
+      data: health,
+      timestamp: new Date().toISOString()
+    });
+  } catch (error) {
+    console.error('Gateway health error:', error);
+    res.status(500).json({
+      error: 'Failed to get gateway health',
       message: error instanceof Error ? error.message : 'Unknown error'
     });
   }
