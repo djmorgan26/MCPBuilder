@@ -22,6 +22,8 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
   const [deploymentId, setDeploymentId] = useState<string | null>(null);
   const [deploymentEndpoint, setDeploymentEndpoint] = useState<string | null>(null);
   const [deploymentProgress, setDeploymentProgress] = useState(0);
+  const [isRegistering, setIsRegistering] = useState(false);
+  const [registrationStatus, setRegistrationStatus] = useState<'idle' | 'registering' | 'success' | 'error'>('idle');
 
   const handleDeploy = async () => {
     if (!generatedCode) return;
@@ -76,7 +78,7 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
             setDeploymentProgress(deployment.progress || 0);
             setDeploymentLogs(deployment.logs || []);
 
-            if (deployment.status === 'running') {
+            if (deployment.status === 'running' || deployment.status === 'completed') {
               setDeploymentStatus('success');
               setDeploymentEndpoint(deployment.endpoint);
               clearInterval(pollInterval);
@@ -104,6 +106,35 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
 
   const copyCommand = (command: string) => {
     navigator.clipboard.writeText(command);
+  };
+
+  const handleRegisterToMCP = async () => {
+    if (!deploymentId) return;
+
+    setIsRegistering(true);
+    setRegistrationStatus('registering');
+
+    try {
+      const response = await fetch(`/api/deploy/${deploymentId}/register-mcp`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error(`Registration failed: ${response.statusText}`);
+      }
+
+      const result = await response.json();
+      setRegistrationStatus('success');
+      console.log('Successfully registered to MCP:', result);
+    } catch (error) {
+      setRegistrationStatus('error');
+      console.error('Failed to register to MCP:', error);
+    } finally {
+      setIsRegistering(false);
+    }
   };
 
   const getDeploymentCommands = () => {
@@ -361,7 +392,7 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
               <p className="text-sm text-green-700 mb-4">
                 Your MCP server is now running at: {deploymentEndpoint}
               </p>
-              <div className="flex items-center space-x-3">
+              <div className="flex items-center space-x-3 flex-wrap gap-2">
                 <button
                   onClick={() => deploymentEndpoint && window.open(deploymentEndpoint, '_blank')}
                   className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-green-700 bg-green-100 hover:bg-green-200 rounded-md transition-colors"
@@ -376,6 +407,35 @@ const DeploymentPanel: React.FC<DeploymentPanelProps> = ({
                   <Copy className="w-4 h-4" />
                   <span>Copy Endpoint</span>
                 </button>
+                {registrationStatus === 'idle' && (
+                  <button
+                    onClick={handleRegisterToMCP}
+                    disabled={isRegistering}
+                    className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-blue-700 bg-blue-100 hover:bg-blue-200 rounded-md transition-colors disabled:opacity-50"
+                  >
+                    {isRegistering ? (
+                      <div className="w-4 h-4 border-2 border-blue-700 border-t-transparent rounded-full animate-spin" />
+                    ) : (
+                      <Package className="w-4 h-4" />
+                    )}
+                    <span>{isRegistering ? 'Registering...' : 'Add to MCP Servers'}</span>
+                  </button>
+                )}
+                {registrationStatus === 'success' && (
+                  <div className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-blue-700 bg-blue-100 rounded-md">
+                    <CheckCircle className="w-4 h-4" />
+                    <span>Added to MCP Servers</span>
+                  </div>
+                )}
+                {registrationStatus === 'error' && (
+                  <button
+                    onClick={handleRegisterToMCP}
+                    className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-red-700 bg-red-100 hover:bg-red-200 rounded-md transition-colors"
+                  >
+                    <AlertTriangle className="w-4 h-4" />
+                    <span>Retry Add to MCP</span>
+                  </button>
+                )}
               </div>
             </div>
           )}

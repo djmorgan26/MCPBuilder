@@ -20,7 +20,7 @@ export interface CloudConfig {
 }
 export interface DeploymentStatus {
     id: string;
-    status: 'pending' | 'building' | 'deploying' | 'running' | 'failed' | 'stopped';
+    status: 'pending' | 'building' | 'deploying' | 'running' | 'failed' | 'stopped' | 'completed';
     progress: number;
     logs: string[];
     startTime: Date;
@@ -28,6 +28,21 @@ export interface DeploymentStatus {
     endpoint?: string;
     containerId?: string;
     error?: string;
+    mcpConfig?: MCPServerConfig;
+}
+export interface MCPServerConfig {
+    id: string;
+    name: string;
+    description: string;
+    config: {
+        command: string;
+        args: string[];
+        transport: {
+            type: 'stdio' | 'http';
+            host?: string;
+            port?: number;
+        };
+    };
 }
 export interface GeneratedCode {
     mainPy: string;
@@ -59,6 +74,7 @@ export declare class DeploymentService extends EventEmitter {
     private buildDockerImage;
     private runDockerContainer;
     private verifyDockerDeployment;
+    private checkContainerRunning;
     private installDependencies;
     private startLocalServer;
     stopDeployment(deploymentId: string): Promise<void>;

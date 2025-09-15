@@ -263,6 +263,59 @@ app.get('/api/deployments', (req, res) => {
         });
     }
 });
+app.post('/api/deploy/:deploymentId/register-mcp', async (req, res) => {
+    try {
+        const { deploymentId } = req.params;
+        console.log(`Attempting to register deployment ${deploymentId} to MCP`);
+        const deployment = deploymentService.getDeployment(deploymentId);
+        console.log(`Deployment found:`, deployment ? `${deployment.status}, mcpConfig: ${!!deployment.mcpConfig}` : 'null');
+        if (!deployment) {
+            console.log('Deployment not found');
+            return res.status(404).json({
+                error: 'Deployment not found'
+            });
+        }
+        if (deployment.status !== 'completed') {
+            console.log(`Deployment status is ${deployment.status}, not completed`);
+            return res.status(400).json({
+                error: 'Deployment must be completed before registering to MCP'
+            });
+        }
+        if (!deployment.mcpConfig) {
+            console.log('Deployment does not have MCP configuration');
+            return res.status(400).json({
+                error: 'Deployment does not have MCP configuration'
+            });
+        }
+        const server = await mcpGateway.registerServer({
+            id: deployment.mcpConfig.id,
+            name: deployment.mcpConfig.name,
+            description: deployment.mcpConfig.description,
+            command: deployment.mcpConfig.config.command,
+            args: deployment.mcpConfig.config.args,
+            transport: deployment.mcpConfig.config.transport,
+            env: {},
+            retries: 3,
+            timeout: 30000
+        });
+        res.json({
+            success: true,
+            data: {
+                deployment: deploymentId,
+                mcpServer: server
+            },
+            message: 'Successfully registered deployed server to MCP',
+            timestamp: new Date().toISOString()
+        });
+    }
+    catch (error) {
+        console.error('Register deployment to MCP error:', error);
+        res.status(500).json({
+            error: 'Failed to register deployment to MCP',
+            message: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
 app.get('/api/mcp/servers', (req, res) => {
     try {
         const servers = mcpGateway.getServers();
