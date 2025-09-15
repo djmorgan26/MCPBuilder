@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Save, Plus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
-import type { Tool, Parameter, ConfigField } from '../types';
+import type { Tool, Parameter } from '../types';
 
 interface ToolModalProps {
   tool: Tool | null;
@@ -80,20 +80,19 @@ const ToolModal: React.FC<ToolModalProps> = ({ tool, isOpen, onSave, onClose }) 
       default: undefined
     };
 
-    handleInputChange('parameters', [...editedTool.parameters, newParameter]);
-  };
-
-  const handleParameterUpdate = (index: number, updates: Partial<Parameter>) => {
-    if (!editedTool) return;
-
-    const updatedParameters = editedTool.parameters.map((param, i) =>
-      i === index ? { ...param, ...updates } : param
-    );
-
+    const updatedParameters = [...editedTool.parameters, newParameter];
     handleInputChange('parameters', updatedParameters);
   };
 
-  const handleParameterDelete = (index: number) => {
+  const handleParameterChange = (index: number, field: keyof Parameter, value: any) => {
+    if (!editedTool) return;
+
+    const updatedParameters = [...editedTool.parameters];
+    updatedParameters[index] = { ...updatedParameters[index], [field]: value };
+    handleInputChange('parameters', updatedParameters);
+  };
+
+  const handleParameterRemove = (index: number) => {
     if (!editedTool) return;
 
     const updatedParameters = editedTool.parameters.filter((_, i) => i !== index);
@@ -103,254 +102,281 @@ const ToolModal: React.FC<ToolModalProps> = ({ tool, isOpen, onSave, onClose }) 
   if (!isOpen || !editedTool) return null;
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-      <div className="bg-white rounded-lg shadow-xl max-w-4xl w-full mx-4 max-h-[90vh] overflow-hidden">
-        <div className="flex items-center justify-between p-6 border-b border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-900">
-            Configure Tool: {editedTool.name}
-          </h2>
+    <div className="fixed inset-0 bg-dark-bg bg-opacity-90 backdrop-blur-sm flex items-center justify-center z-50">
+      <div className="bg-dark-card border border-dark-border rounded-2xl shadow-card max-w-5xl w-full mx-4 max-h-[90vh] overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between p-6 border-b border-dark-border">
+          <div className="flex items-center space-x-3">
+            <div className="w-10 h-10 bg-gradient-to-br from-accent-silver to-accent-neon rounded-xl flex items-center justify-center">
+              <CheckCircle className="w-5 h-5 text-dark-bg" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-text-primary font-apple">
+                Configure Tool: {editedTool.name}
+              </h2>
+              <p className="text-sm text-text-secondary">
+                {editedTool.isValid ? 'Ready to save' : `${errors.length} errors to fix`}
+              </p>
+            </div>
+          </div>
           <button
             onClick={onClose}
-            className="p-2 text-gray-400 hover:text-gray-600 rounded-md hover:bg-gray-100 transition-colors"
+            className="p-2 text-text-tertiary hover:text-text-primary rounded-lg hover:bg-dark-surface transition-all duration-200"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
+        {/* Content */}
         <div className="p-6 overflow-y-auto max-h-[calc(90vh-140px)]">
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid lg:grid-cols-2 gap-8">
             {/* Basic Configuration */}
-            <div className="space-y-4">
-              <h3 className="text-lg font-medium text-gray-900 mb-4">Basic Configuration</h3>
-
+            <div className="space-y-6">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Tool Name *
-                </label>
-                <input
-                  type="text"
-                  value={editedTool.name}
-                  onChange={(e) => handleInputChange('name', e.target.value)}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-mcp-primary focus:border-transparent"
-                  placeholder="Enter tool name"
-                />
-              </div>
+                <h3 className="text-lg font-semibold text-text-primary mb-4 font-apple flex items-center space-x-2">
+                  <CheckCircle className="w-5 h-5 text-accent-neon" />
+                  <span>Basic Configuration</span>
+                </h3>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Description *
-                </label>
-                <textarea
-                  value={editedTool.description}
-                  onChange={(e) => handleInputChange('description', e.target.value)}
-                  rows={3}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-mcp-primary focus:border-transparent"
-                  placeholder="Describe what this tool does"
-                />
-              </div>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Tool Name *
+                    </label>
+                    <input
+                      type="text"
+                      value={editedTool.name}
+                      onChange={(e) => handleInputChange('name', e.target.value)}
+                      className="w-full px-4 py-3 bg-dark-surface border border-dark-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent transition-all duration-200"
+                      placeholder="Enter tool name"
+                    />
+                  </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
-                  Return Type
-                </label>
-                <select
-                  value={editedTool.returnType.type}
-                  onChange={(e) => handleInputChange('returnType', { ...editedTool.returnType, type: e.target.value })}
-                  className="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-mcp-primary focus:border-transparent"
-                >
-                  <option value="string">String</option>
-                  <option value="number">Number</option>
-                  <option value="boolean">Boolean</option>
-                  <option value="object">Object</option>
-                  <option value="array">Array</option>
-                  <option value="void">Void</option>
-                </select>
-              </div>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Description *
+                    </label>
+                    <textarea
+                      value={editedTool.description}
+                      onChange={(e) => handleInputChange('description', e.target.value)}
+                      rows={3}
+                      className="w-full px-4 py-3 bg-dark-surface border border-dark-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent transition-all duration-200 resize-none"
+                      placeholder="Describe what this tool does"
+                    />
+                  </div>
 
-              <div className="flex items-center space-x-4">
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editedTool.isAsync}
-                    onChange={(e) => handleInputChange('isAsync', e.target.checked)}
-                    className="w-4 h-4 text-mcp-primary border-gray-300 rounded focus:ring-mcp-primary"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Async Function</span>
-                </label>
+                  <div>
+                    <label className="block text-sm font-medium text-text-secondary mb-2">
+                      Return Type
+                    </label>
+                    <select
+                      value={editedTool.returnType.type}
+                      onChange={(e) => handleInputChange('returnType', { ...editedTool.returnType, type: e.target.value })}
+                      className="w-full px-4 py-3 bg-dark-surface border border-dark-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent transition-all duration-200"
+                    >
+                      <option value="string">String</option>
+                      <option value="number">Number</option>
+                      <option value="boolean">Boolean</option>
+                      <option value="object">Object</option>
+                      <option value="array">Array</option>
+                      <option value="void">Void</option>
+                    </select>
+                  </div>
 
-                <label className="flex items-center">
-                  <input
-                    type="checkbox"
-                    checked={editedTool.requiresAuth}
-                    onChange={(e) => handleInputChange('requiresAuth', e.target.checked)}
-                    className="w-4 h-4 text-mcp-primary border-gray-300 rounded focus:ring-mcp-primary"
-                  />
-                  <span className="ml-2 text-sm text-gray-700">Requires Authentication</span>
-                </label>
+                  <div className="grid grid-cols-2 gap-4">
+                    <label className="flex items-center space-x-3 p-3 bg-dark-surface rounded-lg border border-dark-border hover:border-accent-silver transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editedTool.isAsync}
+                        onChange={(e) => handleInputChange('isAsync', e.target.checked)}
+                        className="w-4 h-4 text-accent-neon bg-dark-card border-dark-border rounded focus:ring-accent-neon"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-text-primary">Async Function</div>
+                        <div className="text-xs text-text-tertiary">Non-blocking execution</div>
+                      </div>
+                    </label>
+
+                    <label className="flex items-center space-x-3 p-3 bg-dark-surface rounded-lg border border-dark-border hover:border-accent-silver transition-colors cursor-pointer">
+                      <input
+                        type="checkbox"
+                        checked={editedTool.requiresAuth}
+                        onChange={(e) => handleInputChange('requiresAuth', e.target.checked)}
+                        className="w-4 h-4 text-accent-neon bg-dark-card border-dark-border rounded focus:ring-accent-neon"
+                      />
+                      <div>
+                        <div className="text-sm font-medium text-text-primary">Requires Auth</div>
+                        <div className="text-xs text-text-tertiary">Authentication needed</div>
+                      </div>
+                    </label>
+                  </div>
+                </div>
               </div>
             </div>
 
             {/* Parameters */}
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h3 className="text-lg font-medium text-gray-900">Parameters</h3>
-                <button
-                  onClick={handleParameterAdd}
-                  className="flex items-center space-x-1 px-3 py-1 text-sm font-medium text-mcp-primary hover:text-mcp-primary/80 hover:bg-mcp-light/50 rounded-md transition-colors"
-                >
-                  <Plus className="w-4 h-4" />
-                  <span>Add Parameter</span>
-                </button>
-              </div>
+            <div className="space-y-6">
+              <div>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-lg font-semibold text-text-primary font-apple flex items-center space-x-2">
+                    <AlertCircle className="w-5 h-5 text-accent-purple" />
+                    <span>Parameters</span>
+                  </h3>
+                  <button
+                    onClick={handleParameterAdd}
+                    className="flex items-center space-x-2 px-3 py-2 bg-gradient-to-r from-accent-silver to-accent-neon hover:from-accent-neon hover:to-accent-silver text-dark-bg font-medium rounded-lg transition-all duration-300 transform hover:scale-105"
+                  >
+                    <Plus className="w-4 h-4" />
+                    <span>Add Parameter</span>
+                  </button>
+                </div>
 
-              <div className="space-y-3 max-h-80 overflow-y-auto">
-                {editedTool.parameters.map((parameter, index) => (
-                  <div key={index} className="p-4 border border-gray-200 rounded-lg space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-gray-700">Parameter #{index + 1}</span>
-                      <button
-                        onClick={() => handleParameterDelete(index)}
-                        className="p-1 text-gray-400 hover:text-red-500 rounded transition-colors"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Name *
-                        </label>
-                        <input
-                          type="text"
-                          value={parameter.name}
-                          onChange={(e) => handleParameterUpdate(index, { name: e.target.value })}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-mcp-primary"
-                          placeholder="parameter_name"
-                        />
-                      </div>
-
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Type
-                        </label>
-                        <select
-                          value={parameter.type}
-                          onChange={(e) => handleParameterUpdate(index, { type: e.target.value as any })}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-mcp-primary"
+                <div className="space-y-3 max-h-96 overflow-y-auto">
+                  {editedTool.parameters.map((param, index) => (
+                    <div key={index} className="bg-dark-surface rounded-lg p-4 border border-dark-border">
+                      <div className="flex items-center justify-between mb-3">
+                        <span className="text-sm font-medium text-text-primary">
+                          Parameter {index + 1}
+                        </span>
+                        <button
+                          onClick={() => handleParameterRemove(index)}
+                          className="p-1 text-text-tertiary hover:text-status-error rounded hover:bg-status-error/10 transition-all duration-200"
                         >
-                          <option value="string">String</option>
-                          <option value="number">Number</option>
-                          <option value="boolean">Boolean</option>
-                          <option value="object">Object</option>
-                          <option value="array">Array</option>
-                        </select>
+                          <Trash2 className="w-4 h-4" />
+                        </button>
                       </div>
-                    </div>
 
-                    <div>
-                      <label className="block text-xs font-medium text-gray-600 mb-1">
-                        Description *
-                      </label>
-                      <input
-                        type="text"
-                        value={parameter.description}
-                        onChange={(e) => handleParameterUpdate(index, { description: e.target.value })}
-                        className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-mcp-primary"
-                        placeholder="Parameter description"
-                      />
-                    </div>
+                      <div className="grid grid-cols-2 gap-3 mb-3">
+                        <div>
+                          <label className="block text-xs font-medium text-text-secondary mb-1">
+                            Name *
+                          </label>
+                          <input
+                            type="text"
+                            value={param.name}
+                            onChange={(e) => handleParameterChange(index, 'name', e.target.value)}
+                            className="w-full px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent text-sm"
+                            placeholder="parameter_name"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-medium text-text-secondary mb-1">
+                            Type
+                          </label>
+                          <select
+                            value={param.type}
+                            onChange={(e) => handleParameterChange(index, 'type', e.target.value)}
+                            className="w-full px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-text-primary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent text-sm"
+                          >
+                            <option value="string">String</option>
+                            <option value="number">Number</option>
+                            <option value="boolean">Boolean</option>
+                            <option value="object">Object</option>
+                            <option value="array">Array</option>
+                          </select>
+                        </div>
+                      </div>
 
-                    <div className="grid grid-cols-2 gap-3">
-                      <div>
-                        <label className="block text-xs font-medium text-gray-600 mb-1">
-                          Default Value
+                      <div className="mb-3">
+                        <label className="block text-xs font-medium text-text-secondary mb-1">
+                          Description *
                         </label>
                         <input
                           type="text"
-                          value={parameter.default || ''}
-                          onChange={(e) => handleParameterUpdate(index, { default: e.target.value || undefined })}
-                          className="w-full px-2 py-1 text-sm border border-gray-300 rounded focus:outline-none focus:ring-1 focus:ring-mcp-primary"
-                          placeholder="Optional default"
+                          value={param.description}
+                          onChange={(e) => handleParameterChange(index, 'description', e.target.value)}
+                          className="w-full px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent text-sm"
+                          placeholder="Describe this parameter"
                         />
                       </div>
 
-                      <div className="flex items-center pt-5">
-                        <label className="flex items-center">
+                      <div className="flex items-center space-x-4">
+                        <label className="flex items-center space-x-2">
                           <input
                             type="checkbox"
-                            checked={parameter.required}
-                            onChange={(e) => handleParameterUpdate(index, { required: e.target.checked })}
-                            className="w-3 h-3 text-mcp-primary border-gray-300 rounded focus:ring-mcp-primary"
+                            checked={param.required}
+                            onChange={(e) => handleParameterChange(index, 'required', e.target.checked)}
+                            className="w-4 h-4 text-accent-neon bg-dark-card border-dark-border rounded focus:ring-accent-neon"
                           />
-                          <span className="ml-1 text-xs text-gray-700">Required</span>
+                          <span className="text-xs text-text-secondary">Required</span>
                         </label>
+                        {param.default !== undefined && (
+                          <div className="flex-1">
+                            <label className="block text-xs font-medium text-text-secondary mb-1">
+                              Default Value
+                            </label>
+                            <input
+                              type="text"
+                              value={param.default || ''}
+                              onChange={(e) => handleParameterChange(index, 'default', e.target.value)}
+                              className="w-full px-3 py-2 bg-dark-card border border-dark-border rounded-lg text-text-primary placeholder-text-tertiary focus:outline-none focus:ring-2 focus:ring-accent-neon focus:border-transparent text-sm"
+                              placeholder="Default value"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
-                  </div>
-                ))}
+                  ))}
 
-                {editedTool.parameters.length === 0 && (
-                  <div className="text-center py-8 text-gray-500">
-                    <AlertCircle className="w-8 h-8 mx-auto mb-2 text-gray-300" />
-                    <p className="text-sm">No parameters defined</p>
-                    <p className="text-xs text-gray-400 mt-1">Add at least one parameter</p>
-                  </div>
-                )}
+                  {editedTool.parameters.length === 0 && (
+                    <div className="text-center py-8 text-text-tertiary">
+                      <AlertCircle className="w-12 h-12 mx-auto mb-4 text-text-tertiary" />
+                      <p className="text-sm">No parameters added yet</p>
+                      <p className="text-xs mt-1">Click "Add Parameter" to get started</p>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           </div>
 
-          {/* Validation Errors */}
+          {/* Error Display */}
           {errors.length > 0 && (
-            <div className="mt-6 bg-red-50 border border-red-200 rounded-lg p-4">
-              <div className="flex">
-                <AlertCircle className="w-5 h-5 text-red-400 mt-0.5 mr-3" />
-                <div>
-                  <h4 className="text-sm font-medium text-red-800">
-                    Please fix the following errors:
-                  </h4>
-                  <ul className="mt-2 text-sm text-red-700 space-y-1">
-                    {errors.map((error, index) => (
-                      <li key={index}>• {error}</li>
-                    ))}
-                  </ul>
-                </div>
+            <div className="mt-6 p-4 bg-status-error/10 border border-status-error/20 rounded-lg">
+              <div className="flex items-center space-x-2 mb-2">
+                <AlertCircle className="w-5 h-5 text-status-error" />
+                <h4 className="text-sm font-semibold text-status-error">
+                  {errors.length} error{errors.length !== 1 ? 's' : ''} to fix
+                </h4>
               </div>
+              <ul className="space-y-1">
+                {errors.map((error, index) => (
+                  <li key={index} className="text-sm text-status-error">
+                    • {error}
+                  </li>
+                ))}
+              </ul>
             </div>
           )}
         </div>
 
-        <div className="flex items-center justify-between p-6 border-t border-gray-200">
+        {/* Footer */}
+        <div className="flex items-center justify-between p-6 border-t border-dark-border">
           <div className="flex items-center space-x-2">
-            {errors.length === 0 ? (
-              <>
-                <CheckCircle className="w-5 h-5 text-green-500" />
-                <span className="text-sm text-green-700">Tool configuration is valid</span>
-              </>
+            {editedTool.isValid ? (
+              <div className="flex items-center space-x-2 text-status-success">
+                <CheckCircle className="w-4 h-4" />
+                <span className="text-sm font-medium">Ready to save</span>
+              </div>
             ) : (
-              <>
-                <AlertCircle className="w-5 h-5 text-red-500" />
-                <span className="text-sm text-red-700">{errors.length} error{errors.length !== 1 ? 's' : ''} to fix</span>
-              </>
+              <div className="flex items-center space-x-2 text-status-error">
+                <AlertCircle className="w-4 h-4" />
+                <span className="text-sm font-medium">{errors.length} errors</span>
+              </div>
             )}
           </div>
 
           <div className="flex items-center space-x-3">
             <button
               onClick={onClose}
-              className="px-4 py-2 text-sm font-medium text-gray-700 hover:text-gray-900 hover:bg-gray-100 rounded-md transition-colors"
+              className="px-4 py-2 text-text-secondary hover:text-text-primary transition-colors"
             >
               Cancel
             </button>
             <button
               onClick={handleSave}
-              disabled={errors.length > 0}
-              className={`flex items-center space-x-2 px-4 py-2 text-sm font-medium rounded-md transition-colors ${
-                errors.length > 0
-                  ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                  : 'bg-mcp-primary text-white hover:bg-mcp-primary/90'
-              }`}
+              disabled={!editedTool.isValid}
+              className="flex items-center space-x-2 px-6 py-2 bg-gradient-to-r from-accent-silver to-accent-neon hover:from-accent-neon hover:to-accent-silver disabled:from-dark-muted disabled:to-dark-muted disabled:text-text-tertiary text-dark-bg font-semibold rounded-lg transition-all duration-300 transform hover:scale-105 disabled:transform-none disabled:cursor-not-allowed"
             >
               <Save className="w-4 h-4" />
               <span>Save Tool</span>

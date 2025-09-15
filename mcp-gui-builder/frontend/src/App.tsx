@@ -2,10 +2,14 @@ import React, { useState, useCallback } from 'react';
 import { DndProvider } from 'react-dnd';
 import { HTML5Backend } from 'react-dnd-html5-backend';
 import { Toaster } from 'react-hot-toast';
-import Header from './components/Header';
+import NavBar from './components/NavBar';
+import HeroSection from './components/HeroSection';
+import ProductGrid from './components/ProductGrid';
+import Configurator from './components/Configurator';
+import SummaryCheckout from './components/SummaryCheckout';
+import ServerManagement from './components/ServerManagement';
+import Footer from './components/Footer';
 import ServerConfig from './components/ServerConfig';
-import ToolTemplates from './components/ToolTemplates';
-import ActiveTools from './components/ActiveTools';
 import ResourceManager from './components/ResourceManager';
 import CodePreview from './components/CodePreview';
 import DeploymentPanel from './components/DeploymentPanel';
@@ -14,6 +18,7 @@ import MCPConnections from './components/MCPConnections';
 import MCPToolsExplorer from './components/MCPToolsExplorer';
 import ProjectsPanel from './components/ProjectsPanel';
 import type { ServerConfig as ServerConfigType, Tool, Resource, ToolTemplate, GeneratedCode, MCPServer, SavedProject } from './types';
+import { ToolType } from './types';
 import { generateCode } from './utils/codeGenerator';
 import { validateServer } from './utils/validation';
 import './App.css';
@@ -34,8 +39,11 @@ function App() {
   const [selectedTool, setSelectedTool] = useState<Tool | null>(null);
   const [isToolModalOpen, setIsToolModalOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<'tools' | 'resources' | 'code' | 'deploy' | 'connections' | 'explore' | 'projects'>('tools');
+  // const [currentSection, setCurrentSection] = useState<'hero' | 'products' | 'configurator' | 'checkout'>('hero');
   const [generatedCode, setGeneratedCode] = useState<GeneratedCode | null>(null);
   const [selectedMCPServer, setSelectedMCPServer] = useState<MCPServer | null>(null);
+  const [isServerRunning, setIsServerRunning] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'stopped' | 'starting' | 'running' | 'error'>('stopped');
 
   const handleAddTool = useCallback((template: ToolTemplate) => {
     const newTool: Tool = {
@@ -57,7 +65,7 @@ function App() {
     setIsToolModalOpen(true);
   }, [tools]);
 
-  const handleSaveTool = useCallback((tool: Tool) => {
+  const handleSaveToolFromModal = useCallback((tool: Tool) => {
     const existingIndex = tools.findIndex(t => t.id === tool.id);
 
     if (existingIndex >= 0) {
@@ -122,227 +130,246 @@ function App() {
     setGeneratedCode(null); // Clear generated code when loading a project
   }, []);
 
+  const handleStartBuilding = useCallback(() => {
+    // setCurrentSection('products');
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
+  const handleAddToolToBuild = useCallback((template: ToolTemplate) => {
+    handleAddTool(template);
+    // setCurrentSection('configurator');
+    // Scroll to configurator section
+    setTimeout(() => {
+      document.getElementById('configurator')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, [handleAddTool]);
+
+  const handleGenerateAndCheckout = useCallback(() => {
+    handleGenerateCode();
+    // setCurrentSection('checkout');
+    setTimeout(() => {
+      document.getElementById('checkout')?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+  }, [handleGenerateCode]);
+
+  const handleUpdateServerConfig = useCallback((config: ServerConfigType) => {
+    setServerConfig(config);
+  }, []);
+
+  const handleSaveTool = useCallback((tool: Tool) => {
+    const toolData = {
+      ...tool,
+      savedAt: new Date().toISOString(),
+      version: '1.0.0'
+    };
+    const dataStr = JSON.stringify(toolData, null, 2);
+    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
+    
+    const exportFileDefaultName = `${tool.name.replace(/\s+/g, '-').toLowerCase()}-tool.json`;
+    
+    const linkElement = document.createElement('a');
+    linkElement.setAttribute('href', dataUri);
+    linkElement.setAttribute('download', exportFileDefaultName);
+    linkElement.click();
+  }, []);
+
+  const handleCreateToolFromScratch = useCallback(() => {
+    const newTool: Tool = {
+      id: `tool-${Date.now()}`,
+      type: ToolType.CUSTOM,
+      name: 'Custom Tool',
+      description: 'A custom tool created from scratch',
+      parameters: [
+        {
+          name: 'input',
+          type: 'string',
+          description: 'Input parameter',
+          required: true
+        }
+      ],
+      returnType: { type: 'string' },
+      config: {},
+      isValid: false,
+      errors: [],
+      order: tools.length,
+      isAsync: false,
+      requiresAuth: false
+    };
+
+    setSelectedTool(newTool);
+    setIsToolModalOpen(true);
+  }, [tools]);
+
+  const handleLoadTool = useCallback((file: File) => {
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      try {
+        const toolData = JSON.parse(e.target?.result as string);
+        // Create a new tool with a unique ID
+        const loadedTool: Tool = {
+          ...toolData,
+          id: `tool-${Date.now()}`,
+          order: tools.length,
+          isValid: false, // Will be validated when opened
+          errors: []
+        };
+        setSelectedTool(loadedTool);
+        setIsToolModalOpen(true);
+      } catch (error) {
+        console.error('Error loading tool:', error);
+        alert('Error loading tool file. Please check the file format.');
+      }
+    };
+    reader.readAsText(file);
+  }, [tools]);
+
+  const handleClearAllTools = useCallback(() => {
+    if (window.confirm('Are you sure you want to clear all tools? This action cannot be undone.')) {
+      setTools([]);
+      setGeneratedCode(null);
+    }
+  }, []);
+
+  const handleTestServer = useCallback(async () => {
+    setServerStatus('starting');
+    try {
+      // Simulate server testing
+      await new Promise(resolve => setTimeout(resolve, 2000));
+      setServerStatus('running');
+      setIsServerRunning(true);
+    } catch (error) {
+      setServerStatus('error');
+      console.error('Server test failed:', error);
+    }
+  }, []);
+
+  const handleDeployServer = useCallback(() => {
+    handleGenerateCode();
+    // Simulate deployment
+    setServerStatus('starting');
+    setTimeout(() => {
+      setServerStatus('running');
+      setIsServerRunning(true);
+    }, 1000);
+  }, [handleGenerateCode]);
+
   return (
     <DndProvider backend={HTML5Backend}>
-      <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
-        <Header
+      <div className="min-h-screen bg-dark-bg font-apple">
+        {/* Navigation */}
+        <NavBar
           onPreview={handleGenerateCode}
-          onDeploy={handleDeploy}
+          onDeploy={handleGenerateAndCheckout}
           onHelp={() => window.open('/docs', '_blank')}
         />
 
-        <main className="container mx-auto px-4 py-6">
-          <div className="grid grid-cols-12 gap-6">
-            {/* Left Panel - Configuration */}
-            <div className="col-span-3 space-y-6">
-              <ServerConfig
-                config={serverConfig}
-                onChange={setServerConfig}
-              />
+        {/* Hero Section */}
+        <HeroSection onStartBuilding={handleStartBuilding} />
 
-              {activeTab === 'tools' && (
-                <ToolTemplates onAddTool={handleAddTool} />
-              )}
+        {/* Product Grid */}
+        <ProductGrid onAddTool={handleAddToolToBuild} />
 
-              {activeTab === 'resources' && (
-                <ResourceManager
-                  resources={resources}
-                  onChange={setResources}
-                />
-              )}
-            </div>
+        {/* Configurator */}
+        <Configurator
+          tools={tools}
+          onEdit={handleEditTool}
+          onDelete={handleDeleteTool}
+          onReorder={handleReorderTools}
+          onSaveTool={handleSaveTool}
+        />
 
-            {/* Center Panel - Main Content */}
-            <div className="col-span-6">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200">
-                <div className="border-b border-gray-200">
-                  <nav className="flex space-x-8 px-6" aria-label="Tabs">
-                    {(['tools', 'resources', 'connections', 'explore', 'projects', 'code', 'deploy'] as const).map((tab) => (
-                      <button
-                        key={tab}
-                        onClick={() => setActiveTab(tab)}
-                        className={`
-                          py-4 px-1 border-b-2 font-medium text-sm
-                          ${activeTab === tab
-                            ? 'border-mcp-primary text-mcp-primary'
-                            : 'border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300'
-                          }
-                        `}
-                      >
-                        {tab === 'connections' ? 'MCP Servers' :
-                         tab === 'explore' ? 'Explore Tools' :
-                         tab === 'projects' ? 'Projects' :
-                         tab.charAt(0).toUpperCase() + tab.slice(1)}
-                      </button>
-                    ))}
-                  </nav>
-                </div>
-
-                <div className="p-6 min-h-[600px]">
-                  {activeTab === 'tools' && (
-                    <ActiveTools
-                      tools={tools}
-                      onEdit={handleEditTool}
-                      onDelete={handleDeleteTool}
-                      onReorder={handleReorderTools}
-                    />
-                  )}
-
-                  {activeTab === 'resources' && (
-                    <div className="text-center py-12 text-gray-500">
-                      Resource editor will appear here
-                    </div>
-                  )}
-
-                  {activeTab === 'connections' && (
-                    <MCPConnections
-                      onServerSelect={setSelectedMCPServer}
-                      selectedServerId={selectedMCPServer?.id}
-                    />
-                  )}
-
-                  {activeTab === 'explore' && (
-                    <MCPToolsExplorer
-                      selectedServer={selectedMCPServer}
-                    />
-                  )}
-
-                  {activeTab === 'projects' && (
-                    <ProjectsPanel
-                      serverConfig={serverConfig}
-                      tools={tools}
-                      resources={resources}
-                      onLoadProject={handleLoadProject}
-                    />
-                  )}
-
-                  {activeTab === 'code' && (
-                    <CodePreview
-                      serverConfig={serverConfig}
-                      tools={tools}
-                      resources={resources}
-                      generatedCode={generatedCode}
-                    />
-                  )}
-
-                  {activeTab === 'deploy' && (
-                    <DeploymentPanel
-                      serverConfig={serverConfig}
-                      generatedCode={generatedCode}
-                    />
-                  )}
-                </div>
-              </div>
-            </div>
-
-            {/* Right Panel - Help & Info */}
-            <div className="col-span-3">
-              <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-6">
-                <h3 className="text-lg font-semibold text-gray-900 mb-4">Quick Help</h3>
-                <div className="space-y-4 text-sm text-gray-600">
-                  {activeTab === 'tools' && (
-                    <>
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Building Tools</h4>
-                        <p>1. Configure your server details</p>
-                        <p>2. Add tools from templates</p>
-                        <p>3. Configure each tool</p>
-                        <p>4. Generate and deploy</p>
-                      </div>
-
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Tips</h4>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>Drag tools to reorder them</li>
-                          <li>Test tools before deployment</li>
-                          <li>Use environment variables for secrets</li>
-                          <li>Check generated code for customization</li>
-                        </ul>
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === 'connections' && (
-                    <>
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">MCP Connections</h4>
-                        <p>1. Add MCP servers to connect to existing tools</p>
-                        <p>2. Configure transport type (HTTP/WebSocket/Stdio)</p>
-                        <p>3. Connect to discover available tools</p>
-                        <p>4. Use tools directly or import to your build</p>
-                      </div>
-
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Transport Types</h4>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li><strong>HTTP:</strong> REST API servers</li>
-                          <li><strong>WebSocket:</strong> Real-time connections</li>
-                          <li><strong>Stdio:</strong> Local subprocess servers</li>
-                        </ul>
-                      </div>
-                    </>
-                  )}
-
-                  {activeTab === 'explore' && (
-                    <>
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Tool Explorer</h4>
-                        <p>1. Browse tools from connected MCP servers</p>
-                        <p>2. Execute tools with custom parameters</p>
-                        <p>3. View execution results and timing</p>
-                        <p>4. Test server integration before deploying</p>
-                      </div>
-
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Execution Tips</h4>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>Server must be connected to execute tools</li>
-                          <li>Check parameter types and requirements</li>
-                          <li>Use JSON format for complex parameters</li>
-                          <li>Monitor execution time and errors</li>
-                        </ul>
-                      </div>
-                    </>
-                  )}
-
-                  {(activeTab === 'code' || activeTab === 'deploy' || activeTab === 'resources') && (
-                    <>
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Getting Started</h4>
-                        <p>1. Configure your server details</p>
-                        <p>2. Add tools from templates</p>
-                        <p>3. Configure each tool</p>
-                        <p>4. Generate and deploy</p>
-                      </div>
-
-                      <div>
-                        <h4 className="font-medium text-gray-900 mb-1">Tips</h4>
-                        <ul className="list-disc list-inside space-y-1">
-                          <li>Drag tools to reorder them</li>
-                          <li>Test tools before deployment</li>
-                          <li>Use environment variables for secrets</li>
-                          <li>Check generated code for customization</li>
-                        </ul>
-                      </div>
-                    </>
-                  )}
-                </div>
-              </div>
-            </div>
+        {/* Server Management */}
+        <section className="py-20 bg-dark-bg">
+          <div className="max-w-7xl mx-auto px-6">
+            <ServerManagement
+              serverConfig={serverConfig}
+              tools={tools}
+              resources={resources}
+              onUpdateServerConfig={handleUpdateServerConfig}
+              onSaveTool={handleSaveTool}
+              onCreateToolFromScratch={handleCreateToolFromScratch}
+              onLoadTool={handleLoadTool}
+              onClearAllTools={handleClearAllTools}
+              onTestServer={handleTestServer}
+              onDeployServer={handleDeployServer}
+              isServerRunning={isServerRunning}
+              serverStatus={serverStatus}
+            />
           </div>
-        </main>
+        </section>
 
+        {/* Summary/Checkout */}
+        <SummaryCheckout
+          serverConfig={serverConfig}
+          tools={tools}
+          resources={resources}
+          generatedCode={generatedCode}
+          onGenerate={handleGenerateCode}
+          onDeploy={handleDeploy}
+        />
+
+        {/* Footer */}
+        <Footer />
+
+        {/* Legacy Components (Hidden but accessible via navigation) */}
+        {activeTab !== 'tools' && (
+          <div className="hidden">
+            <ServerConfig
+              config={serverConfig}
+              onChange={setServerConfig}
+            />
+            <ResourceManager
+              resources={resources}
+              onChange={setResources}
+            />
+            <MCPConnections
+              onServerSelect={setSelectedMCPServer}
+              selectedServerId={selectedMCPServer?.id}
+            />
+            <MCPToolsExplorer
+              selectedServer={selectedMCPServer || undefined}
+            />
+            <ProjectsPanel
+              serverConfig={serverConfig}
+              tools={tools}
+              resources={resources}
+              onLoadProject={handleLoadProject}
+            />
+            <CodePreview
+              serverConfig={serverConfig}
+              tools={tools}
+              resources={resources}
+              generatedCode={generatedCode}
+            />
+            <DeploymentPanel
+              serverConfig={serverConfig}
+              generatedCode={generatedCode}
+            />
+          </div>
+        )}
+
+        {/* Tool Modal */}
         <ToolModal
           tool={selectedTool}
           isOpen={isToolModalOpen}
-          onSave={handleSaveTool}
+          onSave={handleSaveToolFromModal}
           onClose={() => {
             setIsToolModalOpen(false);
             setSelectedTool(null);
           }}
         />
 
-        <Toaster position="bottom-right" />
+        {/* Toast Notifications */}
+        <Toaster 
+          position="bottom-right"
+          toastOptions={{
+            style: {
+              background: '#111111',
+              color: '#ffffff',
+              border: '1px solid #1a1a1a',
+            },
+          }}
+        />
       </div>
     </DndProvider>
   );
