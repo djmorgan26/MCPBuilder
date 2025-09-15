@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { X, Save, Plus, Trash2, AlertCircle, CheckCircle } from 'lucide-react';
-import type { Tool, Parameter } from '../types';
+import { X, Save, Plus, Trash2, AlertCircle, CheckCircle, Settings } from 'lucide-react';
+import type { Tool, Parameter, ConfigField } from '../types';
 
 interface ToolModalProps {
   tool: Tool | null;
@@ -213,6 +213,45 @@ const ToolModal: React.FC<ToolModalProps> = ({ tool, isOpen, onSave, onClose }) 
                 </div>
               </div>
             </div>
+
+            {/* Tool Configuration */}
+            {editedTool.type !== 'custom' && (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-lg font-semibold text-text-primary font-apple flex items-center space-x-2 mb-4">
+                    <Settings className="w-5 h-5 text-accent-neon" />
+                    <span>Easy Configuration</span>
+                  </h3>
+                  
+                  <div className="bg-dark-surface rounded-lg p-6 border border-dark-border">
+                    <div className="flex items-start space-x-4">
+                      <div className="w-10 h-10 bg-gradient-to-br from-accent-neon to-accent-purple rounded-xl flex items-center justify-center flex-shrink-0">
+                        <Settings className="w-5 h-5 text-dark-bg" />
+                      </div>
+                      <div className="flex-1">
+                        <h4 className="text-md font-semibold text-text-primary mb-2">
+                          Smart Defaults & Easy Options
+                        </h4>
+                        <p className="text-sm text-text-secondary mb-4">
+                          This tool comes with pre-configured settings and dropdown options. 
+                          No need to manually set up complex parameters!
+                        </p>
+                        
+                        <div className="bg-dark-card rounded-lg p-4 border border-dark-border">
+                          <div className="flex items-center space-x-2 mb-3">
+                            <div className="w-2 h-2 bg-status-success rounded-full"></div>
+                            <span className="text-sm font-medium text-text-primary">Pre-configured</span>
+                          </div>
+                          <p className="text-xs text-text-secondary">
+                            Smart defaults are automatically applied. You can customize specific options below if needed.
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
 
             {/* Parameters */}
             <div className="space-y-6">
